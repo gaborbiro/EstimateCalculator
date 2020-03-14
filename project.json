@@ -1,0 +1,18 @@
+{
+   "estimatedWorkHours":39,
+   "inputEstimateScenario":"BEST_CASE",
+   "safetyMargin":0.3,
+   "startDate":"2020-03-16",
+   "currency":"GBP",
+   "hourlyFee":35.0,
+   "weeklyAvailableHours":30,
+   "availabilityRestrictions":{
+      "bestCase":{
+         "2020-03-29":10
+      },
+      "worstCase":{
+         "2020-04-05":10
+      },
+      "type":"END"
+   }
+}

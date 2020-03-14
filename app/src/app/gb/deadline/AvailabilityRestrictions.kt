@@ -52,24 +52,25 @@ class AvailabilityRestrictions private constructor(val bestCase: Map<LocalDate, 
         fun until(date: LocalDate): EndHoursBuilder
     }
 
-    sealed class Type {
+
+    enum class Type {
         /**
          * Start type means you are available with the base hoursPerWeek up until the first date,
          * after that the restrictions apply.
          */
-        object Start : Type()
+        START,
 
         /**
          * End type means the restrictions are end-dates. After the last date you are available with the base hoursPerWeek.
          */
-        object End : Type()
+        END
     }
 
     /////// Implementation
 
     private class TypelessScenarioBuilderImpl : TypelessScenarioBuilder {
-        override fun bestCase(): TypeBuilder = TypeBuilderImpl(Scenario.BestCase)
-        override fun worstCase(): TypeBuilder = TypeBuilderImpl(Scenario.WorstCase)
+        override fun bestCase(): TypeBuilder = TypeBuilderImpl(Scenario.BEST_CASE)
+        override fun worstCase(): TypeBuilder = TypeBuilderImpl(Scenario.WORST_CASE)
     }
 
     private class TypeBuilderImpl(private val scenario: Scenario) : TypeBuilder {
@@ -100,15 +101,15 @@ class AvailabilityRestrictions private constructor(val bestCase: Map<LocalDate, 
     }
 
     private class StartScenarioBuilderImpl(scenario: Scenario, date: LocalDate, hoursPerWeek: Int) :
-            ScenarioBuilder(Type.Start, scenario, date, hoursPerWeek), StartScenarioBuilder {
-        override fun bestCase(): StartTypeBuilderImpl = StartTypeBuilderImpl(Scenario.BestCase, this)
-        override fun worstCase(): StartTypeBuilderImpl = StartTypeBuilderImpl(Scenario.WorstCase, this)
+            ScenarioBuilder(Type.START, scenario, date, hoursPerWeek), StartScenarioBuilder {
+        override fun bestCase(): StartTypeBuilderImpl = StartTypeBuilderImpl(Scenario.BEST_CASE, this)
+        override fun worstCase(): StartTypeBuilderImpl = StartTypeBuilderImpl(Scenario.WORST_CASE, this)
     }
 
     private class EndScenarioBuilderImpl(scenario: Scenario, date: LocalDate, hoursPerWeek: Int) :
-            ScenarioBuilder(Type.End, scenario, date, hoursPerWeek), EndScenarioBuilder {
-        override fun bestCase(): EndTypeBuilder = EndTypeBuilderImpl(Scenario.BestCase, this)
-        override fun worstCase(): EndTypeBuilder = EndTypeBuilderImpl(Scenario.WorstCase, this)
+            ScenarioBuilder(Type.END, scenario, date, hoursPerWeek), EndScenarioBuilder {
+        override fun bestCase(): EndTypeBuilder = EndTypeBuilderImpl(Scenario.BEST_CASE, this)
+        override fun worstCase(): EndTypeBuilder = EndTypeBuilderImpl(Scenario.WORST_CASE, this)
     }
 
     private class StartTypeBuilderImpl(private val scenario: Scenario, private val startScenarioBuilder: StartScenarioBuilderImpl) : StartTypeBuilder {
@@ -129,13 +130,13 @@ class AvailabilityRestrictions private constructor(val bestCase: Map<LocalDate, 
 
         fun add(scenario: Scenario, date: LocalDate, hoursPerWeek: Int) {
             when (scenario) {
-                Scenario.BestCase -> {
+                Scenario.BEST_CASE -> {
                     bestCaseRestrictions[date] = hoursPerWeek
                 }
-                Scenario.WorstCase -> {
+                Scenario.WORST_CASE -> {
                     worstCaseRestrictions[date] = hoursPerWeek
                 }
-                Scenario.Realistic -> throw IllegalArgumentException("Cannot use Scenario.Realistic in building restrictions")
+                Scenario.REALISTIC -> throw IllegalArgumentException("Cannot use Scenario.Realistic in building restrictions")
             }
         }
 
