@@ -19,7 +19,7 @@ object Main {
 
     @JvmStatic
     fun main(args: Array<String>) {
-        val projectSetupFile = if (args.isNotEmpty()) args[0] else "project.json"
+        val projectSetupFile = if (args.isNotEmpty()) args[0] else "input.json"
         val project: ProjectSetup = gson.fromJson(Files.readString(Paths.get(projectSetupFile)), ProjectSetup::class.java)
 //        val project = ProjectSetup(
 //                estimatedWorkHours = 39,
