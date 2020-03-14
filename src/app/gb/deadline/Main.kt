@@ -13,13 +13,13 @@ fun main() {
     val project = ProjectSetup(
             currency = Currency.getInstance("GBP"),
             hourlyFee = 35.0,
-            weeklyAvailableHours = 30
-//            , availabilityRestrictions = AvailabilityRestrictions(
-//                    bestCase = mapOf(LocalDate.of(2020, 3, 29) to 10),
-//                    worstCase = mapOf(LocalDate.of(2020, 4, 5) to 10),
-//                    type = AvailabilityRestrictions.Type.End
-//            )
+            weeklyAvailableHours = 30,
+            availabilityRestrictions = AvailabilityRestrictions.builder()
+                    .bestCase().until(LocalDate.of(2020, 3, 29)).canOnlyDo(10)
+                    .worstCase().until(LocalDate.of(2020, 4, 5)).canOnlyDo(10)
+                    .build()
     )
+
     val startDate = LocalDate.of(2020, 3, 16)
     getEstimate(
             estimatedWorkHours = 39,
@@ -233,28 +233,6 @@ private fun calculateDeadlineWithEndRestriction(
     }
     val remainingWorkHours = workHours - totalWorkedHours
     return dateIndex.plusDays(ceil((remainingWorkHours / baseHoursPerWeek.toFloat()) * 7).toLong())
-}
-
-/**
- * @param bestCase Weekly work hours. Dates must be increasing in order
- * @param worstCase Weekly work hours. Dates must be increasing in order
- */
-class AvailabilityRestrictions(val bestCase: Map<LocalDate, Int>,
-                               val worstCase: Map<LocalDate, Int>,
-                               val type: Type) {
-
-    sealed class Type {
-        /**
-         * Start type means you are available with the base hoursPerWeek up until the first date,
-         * after that the restrictions apply.
-         */
-        object Start : Type()
-
-        /**
-         * End type means the restrictions are end-dates. After the last date you are available with the base hoursPerWeek.
-         */
-        object End : Type()
-    }
 }
 
 sealed class Scenario {
