@@ -1,5 +1,6 @@
 package app.gb.deadline
 
+import java.math.RoundingMode
 import java.text.DecimalFormat
 import java.text.NumberFormat
 import java.time.LocalDate
@@ -9,21 +10,22 @@ import kotlin.math.ceil
 
 
 fun main() {
-    val project = Project(
+    val project = ProjectSetup(
             currency = Currency.getInstance("GBP"),
-            hourlyFee = 35,
-            availability = Availability(
-                    baseHoursPerWeek = 30,
-                    bestCaseRestrictions = mapOf(LocalDate.of(2020, 3, 29) to 10),
-                    worstCaseRestrictions = mapOf(LocalDate.of(2020, 4, 5) to 10),
-                    direction = AvailabilityRestrictionDirection.End
-            ))
+            hourlyFee = 35.0,
+            weeklyAvailableHours = 30
+//            , availabilityRestrictions = AvailabilityRestrictions(
+//                    bestCase = mapOf(LocalDate.of(2020, 3, 29) to 10),
+//                    worstCase = mapOf(LocalDate.of(2020, 4, 5) to 10),
+//                    type = AvailabilityRestrictions.Type.End
+//            )
+    )
     val startDate = LocalDate.of(2020, 3, 16)
     getEstimate(
-            workHours = 39,
-            safetyMarginPercentage = 30,
-            inputScenario = Scenario.BestCase,
-            project = project,
+            estimatedWorkHours = 39,
+            inputEstimateScenario = Scenario.BestCase,
+            safetyMargin = 0.3,
+            projectSetup = project,
             startDate = startDate).let {
         println("Start date:\n\t\t$startDate")
         println("Estimates:")
@@ -40,123 +42,146 @@ fun main() {
     }
 }
 
-fun getEstimate(workHours: Int,
-                safetyMarginPercentage: Int,
-                inputScenario: Scenario,
-                project: Project,
-                startDate: LocalDate? = null): Map<Scenario, Estimate> {
-    val percent: Float = safetyMarginPercentage.toFloat() / 100
+fun getEstimate(estimatedWorkHours: Int,
+                inputEstimateScenario: Scenario,
+                safetyMargin: Double,
+                projectSetup: ProjectSetup,
+                startDate: LocalDate = LocalDate.now()): Map<Scenario, Estimate> {
 
-    val (bestCaseWorkHours, worstCaseWorkHours, realisticWorkHours) = when (inputScenario) {
+    val (bestCaseWorkHours, worstCaseWorkHours, realisticWorkHours) = when (inputEstimateScenario) {
         is Scenario.BestCase -> {
-            val bestCaseWorkHours = workHours
-            val realisticWorkHours = (bestCaseWorkHours * (1 + percent)).toInt()
-            val worstCaseWorkHours = (bestCaseWorkHours * (1 + 2 * percent)).toInt()
+            val bestCaseWorkHours = estimatedWorkHours
+            val realisticWorkHours = (bestCaseWorkHours * (1 + safetyMargin)).toInt()
+            val worstCaseWorkHours = (bestCaseWorkHours * (1 + 2 * safetyMargin)).toInt()
             Triple(bestCaseWorkHours, worstCaseWorkHours, realisticWorkHours)
         }
         is Scenario.Realistic -> {
-            val realisticWorkHours = workHours
-            val bestCaseWorkHours = (realisticWorkHours * (1 - percent)).toInt()
-            val worstCaseWorkHours = (realisticWorkHours * (1 + 2 * percent)).toInt()
+            val realisticWorkHours = estimatedWorkHours
+            val bestCaseWorkHours = (realisticWorkHours * (1 - safetyMargin)).toInt()
+            val worstCaseWorkHours = (realisticWorkHours * (1 + 2 * safetyMargin)).toInt()
             Triple(bestCaseWorkHours, worstCaseWorkHours, realisticWorkHours)
         }
         else -> throw NotImplementedError("WorstCase start scenario not implemented")
     }
 
     return getEstimates(
-            mapOf(Scenario.BestCase to bestCaseWorkHours, Scenario.WorstCase to worstCaseWorkHours, Scenario.Realistic to realisticWorkHours),
-            project,
+            mapOf(
+                    Scenario.BestCase to bestCaseWorkHours,
+                    Scenario.WorstCase to worstCaseWorkHours,
+                    Scenario.Realistic to realisticWorkHours),
+            projectSetup,
             startDate)
 }
 
 fun getEstimates(workHours: Map<Scenario, Int>,
-                 project: Project,
-                 startDate: LocalDate?): Map<Scenario, Estimate> {
+                 projectSetup: ProjectSetup,
+                 startDate: LocalDate): Map<Scenario, Estimate> {
     val bestCaseWorkHours = workHours[Scenario.BestCase]
             ?: throw IllegalArgumentException("Best case scenario missing from workHours")
     val worstCaseWorkHours = workHours[Scenario.WorstCase]
             ?: throw IllegalArgumentException("Worst case scenario missing from workHours")
     val realisticWorkHours = workHours[Scenario.Realistic]
             ?: throw IllegalArgumentException("Realistic scenario missing from workHours")
-    val feeMargin = (worstCaseWorkHours - realisticWorkHours) * project.hourlyFee
-    val deadlines = getDeadlines(bestCaseWorkHours, worstCaseWorkHours, startDate, project)
+    val feeMargin = (worstCaseWorkHours - realisticWorkHours) * projectSetup.hourlyFee
+    val deadlines = getDeadlines(bestCaseWorkHours, worstCaseWorkHours, startDate, projectSetup)
 
-    val currencyFormat = NumberFormat.getCurrencyInstance(Locale.UK) as DecimalFormat
-    currencyFormat.currency = project.currency
+    val currencyFormat = NumberFormat.getCurrencyInstance(Locale.getDefault()) as DecimalFormat
+    with(currencyFormat) {
+        currency = projectSetup.currency
+        maximumFractionDigits = 2
+        minimumFractionDigits = 0
+        roundingMode = RoundingMode.HALF_UP
+    }
 
     return mapOf(
             Scenario.BestCase to Estimate(
                     workHours = bestCaseWorkHours,
                     deadline = deadlines[Scenario.BestCase],
-                    fee = bestCaseWorkHours * project.hourlyFee,
-                    formattedFee = currencyFormat.format(bestCaseWorkHours * project.hourlyFee),
+                    fee = bestCaseWorkHours * projectSetup.hourlyFee,
+                    formattedFee = currencyFormat.format(bestCaseWorkHours * projectSetup.hourlyFee),
                     feeMargin = feeMargin,
                     formattedFeeMargin = currencyFormat.format(feeMargin),
-                    currency = project.currency),
+                    currency = projectSetup.currency),
             Scenario.WorstCase to Estimate(
                     workHours = worstCaseWorkHours,
                     deadline = deadlines[Scenario.WorstCase],
-                    fee = worstCaseWorkHours * project.hourlyFee,
+                    fee = worstCaseWorkHours * projectSetup.hourlyFee,
                     feeMargin = feeMargin,
-                    formattedFee = currencyFormat.format(worstCaseWorkHours * project.hourlyFee),
+                    formattedFee = currencyFormat.format(worstCaseWorkHours * projectSetup.hourlyFee),
                     formattedFeeMargin = currencyFormat.format(feeMargin),
-                    currency = project.currency),
+                    currency = projectSetup.currency),
             Scenario.Realistic to Estimate(
                     workHours = realisticWorkHours,
                     deadline = deadlines[Scenario.Realistic],
-                    fee = realisticWorkHours * project.hourlyFee,
-                    formattedFee = currencyFormat.format(realisticWorkHours * project.hourlyFee),
+                    fee = realisticWorkHours * projectSetup.hourlyFee,
+                    formattedFee = currencyFormat.format(realisticWorkHours * projectSetup.hourlyFee),
                     feeMargin = feeMargin,
                     formattedFeeMargin = currencyFormat.format(feeMargin),
-                    currency = project.currency)
+                    currency = projectSetup.currency)
     )
 }
 
 fun getDeadlines(bestCaseWorkHours: Int,
                  worstCaseWorkHours: Int,
-                 startDate: LocalDate?,
-                 project: Project): Map<Scenario, LocalDate> {
-    project.availability?.let { availability ->
-        val (bestCaseDeadline, worstCaseDeadline) = when (availability.direction) {
-            AvailabilityRestrictionDirection.Start -> {
+                 startDate: LocalDate,
+                 projectSetup: ProjectSetup): Map<Scenario, LocalDate> {
+    projectSetup.availabilityRestrictions?.let { restriction ->
+        val (bestCaseDeadline, worstCaseDeadline) = when (restriction.type) {
+            AvailabilityRestrictions.Type.Start -> {
                 Pair(
                         calculateDeadlineWithStartRestriction(
                                 bestCaseWorkHours,
-                                availability.baseHoursPerWeek,
-                                startDate!!,
-                                availability.bestCaseRestrictions),
+                                projectSetup.weeklyAvailableHours,
+                                startDate,
+                                restriction.bestCase),
                         calculateDeadlineWithStartRestriction(
                                 worstCaseWorkHours,
-                                availability.baseHoursPerWeek,
-                                startDate!!,
-                                availability.worstCaseRestrictions)
+                                projectSetup.weeklyAvailableHours,
+                                startDate,
+                                restriction.worstCase)
                 )
             }
-            AvailabilityRestrictionDirection.End -> {
+            AvailabilityRestrictions.Type.End -> {
                 Pair(
                         calculateDeadlineWithEndRestriction(
                                 bestCaseWorkHours,
-                                availability.baseHoursPerWeek,
-                                startDate!!,
-                                availability.bestCaseRestrictions),
+                                projectSetup.weeklyAvailableHours,
+                                startDate,
+                                restriction.bestCase),
                         calculateDeadlineWithEndRestriction(
                                 worstCaseWorkHours,
-                                availability.baseHoursPerWeek,
-                                startDate!!,
-                                availability.worstCaseRestrictions)
+                                projectSetup.weeklyAvailableHours,
+                                startDate,
+                                restriction.worstCase)
                 )
             }
         }
-        val realisticDeadline = ((bestCaseDeadline.toEpochDay() + worstCaseDeadline.toEpochDay()) / 2).let {
-            LocalDate.ofEpochDay(it)
-        }
+        val realisticDeadline = (bestCaseDeadline.toEpochDay() + worstCaseDeadline.toEpochDay())
+                .let { ceil(it / 2f).toLong() }
+                .let { LocalDate.ofEpochDay(it) }
         return mapOf(
                 Scenario.BestCase to bestCaseDeadline,
-                Scenario.Realistic to realisticDeadline,
-                Scenario.WorstCase to worstCaseDeadline
+                Scenario.WorstCase to worstCaseDeadline,
+                Scenario.Realistic to realisticDeadline
+        )
+    } ?: run {
+        val bestCaseDeadline = calculateDeadline(bestCaseWorkHours, projectSetup.weeklyAvailableHours, startDate)
+        val worstCaseDeadline = calculateDeadline(worstCaseWorkHours, projectSetup.weeklyAvailableHours, startDate)
+        val realisticWorkHours = ceil((bestCaseWorkHours + worstCaseWorkHours) / 2f).toInt()
+        val realisticDeadline = calculateDeadline(realisticWorkHours, projectSetup.weeklyAvailableHours, startDate)
+        return mapOf(
+                Scenario.BestCase to bestCaseDeadline,
+                Scenario.WorstCase to worstCaseDeadline,
+                Scenario.Realistic to realisticDeadline
         )
     }
-    return emptyMap()
+}
+
+private fun calculateDeadline(
+        workHours: Int,
+        baseHoursPerWeek: Int,
+        startDate: LocalDate): LocalDate {
+    return startDate.plusDays(ceil(workHours / baseHoursPerWeek.toFloat() * 7).toLong() - 1)
 }
 
 private fun calculateDeadlineWithStartRestriction(
@@ -164,32 +189,28 @@ private fun calculateDeadlineWithStartRestriction(
         baseHoursPerWeek: Int,
         startDate: LocalDate,
         restrictions: Map<LocalDate, Int>): LocalDate {
-    if (restrictions.isNotEmpty()) {
-        var totalWorkedHours: Int? = null
-        var dateIndex = startDate
-        var lastWeeklyHours = baseHoursPerWeek
-        restrictions.forEach { (restrictionStartDate: LocalDate, restrictedWeeklyHours: Int) ->
-            if (restrictionStartDate > dateIndex) {
-                val days = Period.between(dateIndex, restrictionStartDate).days - 1
-                totalWorkedHours = totalWorkedHours?.let {
-                    it + (days / 7f * lastWeeklyHours).toInt()
-                } ?: run {
-                    (days / 7f * lastWeeklyHours).toInt()
-                }
-            } else {
-                totalWorkedHours = 0
+    var totalWorkedHours: Int? = null
+    var dateIndex = startDate
+    var lastWeeklyHours = baseHoursPerWeek
+    restrictions.forEach { (restrictionStartDate: LocalDate, restrictedWeeklyHours: Int) ->
+        if (restrictionStartDate > dateIndex) {
+            val days = Period.between(dateIndex, restrictionStartDate).days - 1
+            totalWorkedHours = totalWorkedHours?.let {
+                it + (days / 7f * lastWeeklyHours).toInt()
+            } ?: run {
+                (days / 7f * lastWeeklyHours).toInt()
             }
-            if (totalWorkedHours!! >= workHours) {
-                return restrictionStartDate.minusDays(((totalWorkedHours!! - workHours) / baseHoursPerWeek) * 7L)
-            }
-            dateIndex = restrictionStartDate
-            lastWeeklyHours = restrictedWeeklyHours
+        } else {
+            totalWorkedHours = 0
         }
-        val remainingWorkHours = workHours - totalWorkedHours!!
-        return dateIndex.plusDays(ceil(remainingWorkHours / lastWeeklyHours.toFloat() * 7).toLong())
-    } else {
-        return startDate.plusDays(ceil(workHours / baseHoursPerWeek.toFloat()).toLong())
+        if (totalWorkedHours!! >= workHours) {
+            return restrictionStartDate.minusDays(((totalWorkedHours!! - workHours) / baseHoursPerWeek) * 7L)
+        }
+        dateIndex = restrictionStartDate
+        lastWeeklyHours = restrictedWeeklyHours
     }
+    val remainingWorkHours = workHours - totalWorkedHours!!
+    return dateIndex.plusDays(ceil(remainingWorkHours / lastWeeklyHours.toFloat() * 7).toLong())
 }
 
 private fun calculateDeadlineWithEndRestriction(
@@ -197,47 +218,43 @@ private fun calculateDeadlineWithEndRestriction(
         baseHoursPerWeek: Int,
         startDate: LocalDate,
         restrictions: Map<LocalDate, Int>): LocalDate {
-    if (restrictions.isNotEmpty()) {
-        var totalWorkedHours = 0f
-        var dateIndex = startDate
-        var days = 0L
-        restrictions.forEach { (restrictionEndDate: LocalDate, restrictedWeeklyHours: Int) ->
-            if (restrictionEndDate > dateIndex) {
-                days += Period.between(dateIndex, restrictionEndDate).days + 1
-                totalWorkedHours += (days / 7f) * restrictedWeeklyHours
-            }
-            if (totalWorkedHours >= workHours) {
-                return restrictionEndDate
-            }
-            dateIndex = restrictionEndDate
+    var totalWorkedHours = 0f
+    var dateIndex = startDate
+    var days = 0L
+    restrictions.forEach { (restrictionEndDate: LocalDate, restrictedWeeklyHours: Int) ->
+        if (restrictionEndDate > dateIndex) {
+            days += Period.between(dateIndex, restrictionEndDate).days + 1
+            totalWorkedHours += (days / 7f) * restrictedWeeklyHours
         }
-        val remainingWorkHours = workHours - totalWorkedHours
-        return dateIndex.plusDays(ceil((remainingWorkHours / baseHoursPerWeek.toFloat()) * 7).toLong())
-    } else {
-        return startDate.plusDays(ceil(workHours / baseHoursPerWeek.toFloat() * 7).toLong())
+        if (totalWorkedHours >= workHours) {
+            return restrictionEndDate
+        }
+        dateIndex = restrictionEndDate
     }
+    val remainingWorkHours = workHours - totalWorkedHours
+    return dateIndex.plusDays(ceil((remainingWorkHours / baseHoursPerWeek.toFloat()) * 7).toLong())
 }
 
 /**
- * @param bestCaseRestrictions Weekly work hours. Dates must be increasing in order
- * @param worstCaseRestrictions Weekly work hours. Dates must be increasing in order
+ * @param bestCase Weekly work hours. Dates must be increasing in order
+ * @param worstCase Weekly work hours. Dates must be increasing in order
  */
-class Availability(val baseHoursPerWeek: Int,
-                   val bestCaseRestrictions: Map<LocalDate, Int>,
-                   val worstCaseRestrictions: Map<LocalDate, Int>,
-                   val direction: AvailabilityRestrictionDirection)
+class AvailabilityRestrictions(val bestCase: Map<LocalDate, Int>,
+                               val worstCase: Map<LocalDate, Int>,
+                               val type: Type) {
 
-sealed class AvailabilityRestrictionDirection {
-    /**
-     * Start direction means you are available with the base hoursPerWeek up until the first date,
-     * after that the restrictions apply.
-     */
-    object Start : AvailabilityRestrictionDirection()
+    sealed class Type {
+        /**
+         * Start type means you are available with the base hoursPerWeek up until the first date,
+         * after that the restrictions apply.
+         */
+        object Start : Type()
 
-    /**
-     * End direction means the restrictions are end-dates. After the last date you are available with the base hoursPerWeek.
-     */
-    object End : AvailabilityRestrictionDirection()
+        /**
+         * End type means the restrictions are end-dates. After the last date you are available with the base hoursPerWeek.
+         */
+        object End : Type()
+    }
 }
 
 sealed class Scenario {
@@ -246,10 +263,11 @@ sealed class Scenario {
     object Realistic : Scenario()
 }
 
-class Project(
+class ProjectSetup(
         val currency: Currency,
-        val hourlyFee: Int,
-        val availability: Availability?)
+        val hourlyFee: Double,
+        val weeklyAvailableHours: Int,
+        val availabilityRestrictions: AvailabilityRestrictions? = null)
 
 
 data class Estimate(
@@ -265,9 +283,9 @@ data class Estimate(
         val deadline: LocalDate?,
 
         /**
-         * How much you charge? (based on the specified [Project.hourlyFee])
+         * How much you charge? (based on the specified [ProjectSetup.hourlyFee])
          */
-        val fee: Int,
+        val fee: Double,
 
         val formattedFee: String,
 
@@ -275,7 +293,7 @@ data class Estimate(
          * Unrelated to [fee] unless this Estimate is the [Scenario.Realistic] case. If it is, the the total fee can be
          * expressed as [fee] ±[feeMargin]
          */
-        val feeMargin: Int,
+        val feeMargin: Double,
 
         val formattedFeeMargin: String,
 
