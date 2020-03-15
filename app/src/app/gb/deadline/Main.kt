@@ -49,7 +49,7 @@ object Main {
             }
         }
         println()
-        println("Tap any key to exit...")
+        println("Hit new line to exit...")
         Scanner(System.`in`).nextLine()
     }
 
@@ -206,17 +206,17 @@ object Main {
                 } ?: run {
                     (days / 7f * lastWeeklyHours).toInt()
                 }
+                dateIndex = restrictionStartDate
             } else {
                 totalWorkedHours = 0
             }
             if (totalWorkedHours!! >= workHours) {
                 return restrictionStartDate.minusDays(((totalWorkedHours!! - workHours) / baseHoursPerWeek) * 7L)
             }
-            dateIndex = restrictionStartDate
             lastWeeklyHours = restrictedWeeklyHours
         }
         val remainingWorkHours = workHours - totalWorkedHours!!
-        return dateIndex.plusDays(ceil(remainingWorkHours / lastWeeklyHours.toFloat() * 7).toLong())
+        return dateIndex.plusDays(ceil(remainingWorkHours / lastWeeklyHours.toFloat() * 7).toLong() - 1)
     }
 
     private fun calculateDeadlineWithEndRestriction(
@@ -231,14 +231,14 @@ object Main {
             if (restrictionEndDate > dateIndex) {
                 days += Period.between(dateIndex, restrictionEndDate).days + 1
                 totalWorkedHours += (days / 7f) * restrictedWeeklyHours
+                dateIndex = restrictionEndDate
             }
             if (totalWorkedHours >= workHours) {
                 return restrictionEndDate
             }
-            dateIndex = restrictionEndDate
         }
         val remainingWorkHours = workHours - totalWorkedHours
-        return dateIndex.plusDays(ceil((remainingWorkHours / baseHoursPerWeek.toFloat()) * 7).toLong())
+        return dateIndex.plusDays(ceil((remainingWorkHours / baseHoursPerWeek.toFloat()) * 7).toLong() - 1)
     }
 
     class ProjectSetup(

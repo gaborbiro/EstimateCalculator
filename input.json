@@ -2,7 +2,7 @@
    "estimatedWorkHours":39,
    "inputEstimateScenario":"BEST_CASE",
    "safetyMargin":0.3,
-   "startDate":"2020-03-16",
+   "startDate":"2020-04-01",
    "currency":"GBP",
    "hourlyFee":35.0,
    "weeklyAvailableHours":30,
