@@ -36,6 +36,10 @@ object Main {
 //        )
         getEstimate(setup = project).let {
             println("Start date:\n\t\t${project.startDate}")
+            println("Hours per week:\n\t\t${project.weeklyAvailableHours    }")
+            if (project.availabilityRestrictions != null && (project.availabilityRestrictions.bestCase.isNotEmpty() || project.availabilityRestrictions.worstCase.isNotEmpty())) {
+                println("\nAvailability restriction are set\n")
+            }
             println("Estimates:")
             it[Scenario.BEST_CASE]?.let {
                 println("\t\tBest case:  ${it.workHours}hr, done by ${it.deadline}")
@@ -49,7 +53,7 @@ object Main {
             }
         }
         println()
-        println("Hit new line to exit...")
+        println("Hit enter to exit...")
         Scanner(System.`in`).nextLine()
     }
 
@@ -79,9 +83,9 @@ object Main {
                 setup.startDate)
     }
 
-    fun getEstimates(workHours: Map<Scenario, Int>,
-                     setup: ProjectSetup,
-                     startDate: LocalDate): Map<Scenario, Estimate> {
+    private fun getEstimates(workHours: Map<Scenario, Int>,
+                             setup: ProjectSetup,
+                             startDate: LocalDate): Map<Scenario, Estimate> {
         val bestCaseWorkHours = workHours[Scenario.BEST_CASE]
                 ?: throw IllegalArgumentException("Best case scenario missing from workHours")
         val worstCaseWorkHours = workHours[Scenario.WORST_CASE]
